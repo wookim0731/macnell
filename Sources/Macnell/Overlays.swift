@@ -97,27 +97,46 @@ final class OverlayView: NSView {
     }
 }
 
+/// One entry of a themed context menu; `nil` in a list of entries draws a separator
+struct MenuEntry {
+    var title: String
+    var shortcut: String? = nil
+    var destructive = false
+    var enabled = true
+    var action: () -> Void
+}
+
 /// One row of a themed context menu
 final class MenuRow: NSView {
     private let handler: () -> Void
+    private let enabled: Bool
     private let hoverColor: NSColor
     private var hovering = false { didSet { needsDisplay = true } }
 
-    init(_ title: String, destructive: Bool, theme: Theme, handler: @escaping () -> Void) {
+    init(_ entry: MenuEntry, theme: Theme, handler: @escaping () -> Void) {
         self.handler = handler
+        enabled = entry.enabled
         hoverColor = theme.text.withAlphaComponent(0.07)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: 30).isActive = true
-        let label = NSTextField(labelWithString: title)
+        let color = entry.destructive ? Theme.danger : theme.text
+        let label = NSTextField(labelWithString: entry.title)
         label.font = .systemFont(ofSize: 13)
-        label.textColor = destructive ? Theme.danger : theme.text
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
+        label.textColor = entry.enabled ? color : color.withAlphaComponent(0.35)
+        let keys = NSTextField(labelWithString: entry.shortcut ?? "")
+        keys.font = .systemFont(ofSize: 12)
+        keys.textColor = theme.secondaryText.withAlphaComponent(entry.enabled ? 0.9 : 0.35)
+        for v in [label, keys] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            keys.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 16),
+            keys.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            keys.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
@@ -129,16 +148,37 @@ final class MenuRow: NSView {
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
     }
 
-    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseEntered(with event: NSEvent) { hovering = enabled }
     override func mouseExited(with event: NSEvent) { hovering = false }
     override func mouseDown(with event: NSEvent) {}
-    override func mouseUp(with event: NSEvent) { handler() }
+    override func mouseUp(with event: NSEvent) { if enabled { handler() } }
 
     override func draw(_ dirtyRect: NSRect) {
         guard hovering else { return }
         hoverColor.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
     }
+}
+
+/// Hairline between groups of menu rows
+final class MenuSeparator: NSView {
+    init(theme: Theme) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: 9).isActive = true
+        let line = ColorView()
+        line.color = theme.text.withAlphaComponent(0.1)
+        line.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(line)
+        NSLayoutConstraint.activate([
+            line.heightAnchor.constraint(equalToConstant: 1),
+            line.centerYAnchor.constraint(equalTo: centerYAnchor),
+            line.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            line.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
 }
 
 /// Text field sitting on a soft rounded well

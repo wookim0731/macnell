@@ -22,6 +22,14 @@ final class MarkdownTextView: NSTextView {
     /// Called when this view gains or loses keyboard focus
     var onFocusChange: (() -> Void)?
 
+    /// Right-click: the app shows its own small menu instead of the system text menu
+    var onContextMenu: ((_ windowPoint: NSPoint) -> Void)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        onContextMenu?(event.locationInWindow)
+        return nil
+    }
+
     /// Body size from Settings → Text size; everything else scales by `scale`
     static var baseSize: CGFloat { Store.shared.data.textSize.points }
     static var baseFont: NSFont { NSFont.systemFont(ofSize: baseSize) }

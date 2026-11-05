@@ -45,6 +45,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         buildLayout()
         pageView.onEdit = { [weak self] page in self?.store.page = page }
+        pageView.onContextMenu = { [weak self] tv, point in self?.showTextMenu(for: tv, at: point) }
         shelf.onSelect = { [weak self] n in self?.selectNotebook(n) }
         shelf.onEdit = { [weak self] n in self?.editCover(n) }
         shelf.onContextMenu = { [weak self] n, point in self?.showCoverMenu(n, at: point) }
@@ -314,7 +315,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         notebooksChanged()
     }
 
-    @objc func deleteCurrentPage() {
+    func deleteCurrentPage() {
         guard !isClosed else { return }
         let remove = { [self] in
             var nb = store.notebook
@@ -428,8 +429,16 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     private func showCoverMenu(_ n: Int, at windowPoint: NSPoint) {
         presentMenu([
-            ("Edit cover", false, { [weak self] in self?.editCover(n) }),
-            ("Delete notebook", true, { [weak self] in self?.deleteNotebook(n) }),
+            MenuEntry(title: "Edit cover") { [weak self] in self?.editCover(n) },
+            MenuEntry(title: "Delete notebook", destructive: true) { [weak self] in self?.deleteNotebook(n) },
+        ], at: windowPoint)
+    }
+
+    /// Right-click in a page: the only option is deleting it
+    private func showTextMenu(for tv: MarkdownTextView, at windowPoint: NSPoint) {
+        guard tv.isEditable else { return }
+        presentMenu([
+            MenuEntry(title: "Delete page", destructive: true) { [weak self] in self?.deleteCurrentPage() },
         ], at: windowPoint)
     }
 
@@ -575,16 +584,17 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     /// Small themed menu that opens where you right-clicked
-    private func presentMenu(_ items: [(title: String, destructive: Bool, action: () -> Void)], at windowPoint: NSPoint) {
+    private func presentMenu(_ entries: [MenuEntry?], at windowPoint: NSPoint) {
         let theme = store.data.theme
         let layer = OverlayView(dimmed: false, theme: theme)
         layer.onDismiss = { [weak self] in self?.dismissOverlay() }
 
         let card = CardView(theme: theme, radius: 10)
-        let rows = NSStackView(views: items.map { item in
-            MenuRow(item.title, destructive: item.destructive, theme: theme) { [weak self] in
+        let rows = NSStackView(views: entries.map { entry -> NSView in
+            guard let entry else { return MenuSeparator(theme: theme) }
+            return MenuRow(entry, theme: theme) { [weak self] in
                 self?.dismissOverlay()
-                item.action()
+                entry.action()
             }
         })
         rows.orientation = .vertical

@@ -31,7 +31,7 @@ You only need the Command Line Tools (Swift 5.10+) to build it, not Xcode. It us
 | Move between the title and sections | `⌘[` / `⌘]` |
 | Switch between one and two pages (previous page on the left, read-only) | Settings → Pages → Page view |
 | New page | `⌘T` (adds a page at the end), or flip past the last page |
-| Delete page | `⇧⌘⌫` |
+| Delete page | Right-click the page → Delete page |
 | Notebook covers shelf | `⌘\`: click a cover to open it, double-click to edit its title, description and color |
 | New notebook | `⇧⌘N`, or "+ New Notebook" at the end of the shelf. Right-click a cover to edit or delete it. |
 | Settings (paper color, date format, launch at login) | `⌘,` |

@@ -24,6 +24,7 @@ class ColorView: NSView {
 /// | `summary`    | Notes   | Summary (bottom) | hidden |
 final class PageView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var onEdit: ((Page) -> Void)?
+    var onContextMenu: ((_ textView: MarkdownTextView, _ windowPoint: NSPoint) -> Void)?
 
     private(set) var page = Page()
     private var loading = false
@@ -74,6 +75,9 @@ final class PageView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         for tv in [first, body, last] {
             tv.delegate = self
             tv.onFocusChange = { [weak self] in self?.updateSectionLabels() }
+            tv.onContextMenu = { [weak self, weak tv] point in
+                if let tv { self?.onContextMenu?(tv, point) }
+            }
         }
 
         let views: [NSView] = [titleField, dateLabel, headerLine, firstLabel, bodyLabel, lastLabel,
@@ -127,17 +131,13 @@ final class PageView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
         switch kind {
         case .macnell:
-            setSections(first: ("TO DO", "[] What's on your plate today"),
-                        body: ("DONE", "What you got done…"),
-                        last: ("NOTES", "Anything worth remembering…"))
+            setSections("TO DO", "DONE", "NOTES")
             layoutConstraints = stacked(firstHeight: 0.26) + lastSection()
         case .cornell:
-            setSections(first: ("CUES", "Questions & keywords"),
-                        body: ("NOTES", "Start writing…   [] checkbox · # heading · - list · > quote"),
-                        last: ("SUMMARY", "Sum it up in a line or two"))
+            setSections("CUES", "NOTES", "SUMMARY")
             layoutConstraints = columns() + lastSection()
         case .blank:
-            setSections(first: ("", ""), body: ("", "Start writing…   [] checkbox · # heading · - list · > quote"), last: ("", ""))
+            setSections("", "", "")
             [firstLabel, firstScroll, splitLine, bodyLabel, lastLine, lastLabel, lastScroll].forEach { $0.isHidden = true }
             layoutConstraints = [
                 bodyScroll.topAnchor.constraint(equalTo: headerLine.bottomAnchor, constant: 14),
@@ -150,10 +150,12 @@ final class PageView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         updateSectionLabels()
     }
 
-    private func setSections(first f: (String, String), body b: (String, String), last l: (String, String)) {
-        firstLabel.stringValue = f.0; first.placeholder = f.1
-        bodyLabel.stringValue = b.0; body.placeholder = b.1
-        lastLabel.stringValue = l.0; last.placeholder = l.1
+    /// Section labels; every empty section shows a plain "…"
+    private func setSections(_ firstTitle: String, _ bodyTitle: String, _ lastTitle: String) {
+        firstLabel.stringValue = firstTitle
+        bodyLabel.stringValue = bodyTitle
+        lastLabel.stringValue = lastTitle
+        for tv in [first, body, last] { tv.placeholder = "…" }
     }
 
     /// Macnell: To do / Done / Notes stacked top to bottom

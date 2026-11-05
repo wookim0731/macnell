@@ -59,7 +59,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         ("⌘W", "Close the notebook (shows its cover); press again to close the window"),
         ("⌘← / ⌘→", "Previous / next page (or swipe with two fingers)"),
         ("⌘T", "New page"),
-        ("⇧⌘⌫", "Delete page"),
         ("⌘[ / ⌘]", "Move between title and sections"),
         ("⌘\\", "Show or hide notebook covers"),
         ("⇧⌘N", "New notebook"),

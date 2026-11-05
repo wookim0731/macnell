@@ -50,8 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(item("Open Macnell", #selector(showNotes)))
         menu.addItem(.separator())
-        menu.addItem(item("Settings…", #selector(showSettings)))
-        menu.addItem(item("Quit Macnell", #selector(NSApplication.terminate(_:)), target: NSApp))
+        menu.addItem(item("Settings…", #selector(showSettings), key: ","))
+        menu.addItem(item("Quit Macnell", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
         statusItem.menu = menu
         statusItem.isVisible = Store.shared.data.showsMenuBarIcon
     }
@@ -95,8 +95,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         page.addItem(item("Next Section", #selector(MainWindowController.nextSection), key: "]", target: main))
         page.addItem(item("Close Notebook", #selector(MainWindowController.closeNotebook), key: "w", target: main))
         page.addItem(item("New Page", #selector(MainWindowController.newPage), key: "t", target: main))
-        page.addItem(item("Delete Page", #selector(MainWindowController.deleteCurrentPage), key: "\u{8}",
-                          modifiers: [.command, .shift], target: main))
         page.addItem(.separator())
         page.addItem(item("New Notebook…", #selector(MainWindowController.addNotebook), key: "n",
                           modifiers: [.command, .shift], target: main))

@@ -12,6 +12,13 @@ final class CoverView: NSView {
     var onClick: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onRightClick: ((NSPoint) -> Void)?   // point in window coordinates
+    /// Set to make the cover draggable; all points are in window coordinates
+    var onDragBegan: ((NSPoint) -> Void)?
+    var onDragMoved: ((NSPoint) -> Void)?
+    var onDragEnded: (() -> Void)?
+
+    private var mouseDownPoint: NSPoint?
+    private var isDragging = false
 
     var notebook: Notebook { didSet { needsDisplay = true } }
     private let isCurrent: Bool
@@ -35,7 +42,30 @@ final class CoverView: NSView {
 
     override var isFlipped: Bool { true }
 
+    override func mouseDown(with event: NSEvent) {
+        mouseDownPoint = event.locationInWindow
+        isDragging = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard onDragBegan != nil, let start = mouseDownPoint else { return }
+        let p = event.locationInWindow
+        if !isDragging {
+            guard hypot(p.x - start.x, p.y - start.y) > 4 else { return }
+            isDragging = true
+            onDragBegan?(start)
+        }
+        onDragMoved?(p)
+        superview?.autoscroll(with: event)
+    }
+
     override func mouseUp(with event: NSEvent) {
+        mouseDownPoint = nil
+        if isDragging {
+            isDragging = false
+            onDragEnded?()
+            return
+        }
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         if event.clickCount == 2 { onDoubleClick?() } else if event.clickCount == 1 { onClick?() }
     }
@@ -189,10 +219,15 @@ final class CoverShelf: NSObject {
     var onEdit: ((Int) -> Void)?
     var onContextMenu: ((_ notebook: Int, _ windowPoint: NSPoint) -> Void)?
     var onAdd: (() -> Void)?
+    var onMove: ((_ from: Int, _ to: Int) -> Void)?
 
     private let store = Store.shared
     private let stack = NSStackView()
+    private let doc = FlippedView()
     private var theme: Theme = .white
+
+    /// In-progress drag: the cover left behind as a faded placeholder and a snapshot following the pointer
+    private var drag: (cover: CoverView, from: Int, ghost: NSImageView, grabOffset: CGFloat)?
 
     override init() {
         super.init()
@@ -200,7 +235,7 @@ final class CoverShelf: NSObject {
         stack.alignment = .centerX
         stack.spacing = 14
 
-        let doc = FlippedView()
+        doc.wantsLayer = true
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -241,12 +276,68 @@ final class CoverShelf: NSObject {
             cover.onClick = { [weak self] in self?.onSelect?(i) }
             cover.onDoubleClick = { [weak self] in self?.onEdit?(i) }
             cover.onRightClick = { [weak self] point in self?.onContextMenu?(i, point) }
+            cover.onDragBegan = { [weak self, weak cover] point in
+                guard let self, let cover else { return }
+                self.beginDrag(cover, from: i, at: point)
+            }
+            cover.onDragMoved = { [weak self] point in self?.moveDrag(to: point) }
+            cover.onDragEnded = { [weak self] in self?.endDrag() }
             stack.addArrangedSubview(cover)
         }
         let add = AddCoverView()
         add.tint = theme.secondaryText
         add.onClick = { [weak self] in self?.onAdd?() }
         stack.addArrangedSubview(add)
+    }
+
+    // MARK: - Drag to reorder
+
+    private func beginDrag(_ cover: CoverView, from index: Int, at windowPoint: NSPoint) {
+        let frame = cover.convert(cover.bounds, to: doc)
+        guard let rep = cover.bitmapImageRepForCachingDisplay(in: cover.bounds) else { return }
+        cover.cacheDisplay(in: cover.bounds, to: rep)
+        let image = NSImage(size: cover.bounds.size)
+        image.addRepresentation(rep)
+        let ghost = NSImageView(frame: frame)
+        ghost.image = image
+        ghost.wantsLayer = true
+        ghost.layer?.shadowColor = NSColor.black.cgColor
+        ghost.layer?.shadowOpacity = 0.3
+        ghost.layer?.shadowRadius = 12
+        doc.addSubview(ghost)
+        cover.alphaValue = 0.25
+        drag = (cover, index, ghost, doc.convert(windowPoint, from: nil).y - frame.minY)
+    }
+
+    private func moveDrag(to windowPoint: NSPoint) {
+        guard let drag else { return }
+        drag.ghost.setFrameOrigin(NSPoint(x: drag.ghost.frame.minX,
+                                          y: doc.convert(windowPoint, from: nil).y - drag.grabOffset))
+        // Slot = number of other covers whose middle sits above the ghost's middle
+        let others = stack.arrangedSubviews.compactMap { $0 as? CoverView }.filter { $0 !== drag.cover }
+        let target = others.filter { $0.convert($0.bounds, to: doc).midY < drag.ghost.frame.midY }.count
+        guard stack.arrangedSubviews.firstIndex(of: drag.cover) != target else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.allowsImplicitAnimation = true
+            stack.removeArrangedSubview(drag.cover)
+            stack.insertArrangedSubview(drag.cover, at: target)
+            doc.layoutSubtreeIfNeeded()
+        }
+    }
+
+    private func endDrag() {
+        guard let drag else { return }
+        self.drag = nil
+        let to = stack.arrangedSubviews.firstIndex(of: drag.cover) ?? drag.from
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.15
+            drag.ghost.animator().frame = drag.cover.convert(drag.cover.bounds, to: doc)
+        }, completionHandler: { [weak self] in
+            drag.ghost.removeFromSuperview()
+            drag.cover.alphaValue = 1
+            if to != drag.from { self?.onMove?(drag.from, to) }
+        })
     }
 }
 

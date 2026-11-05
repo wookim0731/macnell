@@ -27,16 +27,15 @@ You only need the Command Line Tools (Swift 5.10+) to build it, not Xcode. It us
 | --- | --- |
 | Open Macnell | Menu bar icon → Open Macnell (can be hidden in Settings → General), Launchpad, or swipe to its space |
 | Close the notebook (shows its cover) | `⌘W`. Press it again to close the window. Click the cover or press Return to open it again. |
-| Previous / next page | `⌘←` / `⌘→`, or a two-finger horizontal swipe |
+| Previous / next page | `⇧⌘[` / `⇧⌘]`, a two-finger horizontal swipe, or the arrows beside the page |
 | Move between the title and sections | `⌘[` / `⌘]` |
 | Switch between one and two pages (previous page on the left, read-only) | Settings → Pages → Page view |
 | New page | `⌘T` (adds a page at the end), or flip past the last page |
 | Delete page | Right-click the page → Delete page |
 | Notebook covers shelf | `⌘\`: click a cover to open it, double-click to edit its title, description and color |
+| Leave full screen for a while | `⌃⌘F` or the green window button. Reopening Macnell goes back to full screen. |
 | New notebook | `⇧⌘N`, or "+ New Notebook" at the end of the shelf. Right-click a cover to edit or delete it. |
 | Settings (paper color, date format, launch at login) | `⌘,` |
-
-`⌘←` / `⌘→` flip pages, so they no longer move the cursor to the start or end of a line. Use `⌃A` / `⌃E` for that instead.
 
 Macnell always runs full screen in its own space. To keep it at the far right, drag it there once in Mission Control, and turn off "Automatically rearrange Spaces based on most recent use" in System Settings → Desktop & Dock.
 

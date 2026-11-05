@@ -6,7 +6,8 @@ extension NSAttributedString.Key {
 }
 
 /// Text view that keeps the markdown source but renders it live, like Obsidian's live preview.
-/// Supports `# / ## / ###` headings, `[]` `[ ]` `[x]` checkboxes (click to toggle), `- ` lists, `> ` quotes
+/// Supports `# / ## / ###` headings, `[]` `[ ]` `[x]` checkboxes (click to toggle), `- ` lists, `> ` quotes.
+/// Tab / Shift-Tab nest list items by `indentUnit`.
 final class MarkdownTextView: NSTextView {
     var theme: Theme = .white {
         didSet {
@@ -39,6 +40,10 @@ final class MarkdownTextView: NSTextView {
     private static let taskRegex = try! NSRegularExpression(pattern: "^(\\s*)((?:[-*+]\\s+)?\\[([ xX]?)\\])(\\s*)")
     private static let bulletRegex = try! NSRegularExpression(pattern: "^(\\s*)([-*+])(\\s+)")
     private static let quoteRegex = try! NSRegularExpression(pattern: "^(>)(\\s?)")
+
+    /// One nesting level of a list item, and how wide it renders
+    private static let indentUnit = "  "
+    private static var indentStep: CGFloat { 24 * scale }   // also the checkbox column, so nested boxes sit under the parent's text
 
     private var lastActiveParagraph: NSRange?
 
@@ -144,7 +149,8 @@ final class MarkdownTextView: NSTextView {
             let inner = (line as NSString).substring(with: m.range(at: 3))
             let checked = inner.lowercased() == "x"
             s.addAttributes([.foregroundColor: NSColor.clear, .mnDecoration: checked ? "task-on" : "task-off"], range: marker)
-            widen(marker, to: 30 * Self.scale, in: s)
+            layoutListItem(lead: abs(m.range(at: 1)), prefix: abs(NSRange(location: m.range(at: 2).location, length: NSMaxRange(m.range) - m.range(at: 2).location)),
+                           width: Self.indentStep, line: r, in: s)
             if checked {
                 let restStart = NSMaxRange(abs(m.range))
                 let rest = NSRange(location: restStart, length: NSMaxRange(r) - restStart)
@@ -152,15 +158,14 @@ final class MarkdownTextView: NSTextView {
                     s.addAttributes([.foregroundColor: theme.secondaryText, .strikethroughStyle: NSUnderlineStyle.single.rawValue], range: rest)
                 }
             }
-            hangIndent(prefix: abs(m.range), line: r, in: s)
             return
         }
 
         if let m = Self.bulletRegex.firstMatch(in: line, range: local) {
             let marker = abs(m.range(at: 2))
             s.addAttributes([.foregroundColor: NSColor.clear, .mnDecoration: "bullet"], range: marker)
-            widen(marker, to: 12 * Self.scale, in: s)
-            hangIndent(prefix: abs(m.range), line: r, in: s)
+            layoutListItem(lead: abs(m.range(at: 1)), prefix: abs(NSRange(location: m.range(at: 2).location, length: NSMaxRange(m.range) - m.range(at: 2).location)),
+                           width: 16 * Self.scale, line: r, in: s)
             return
         }
 
@@ -178,6 +183,26 @@ final class MarkdownTextView: NSTextView {
         let current = s.attributedSubstring(from: range).size().width
         guard current < width, range.length > 0 else { return }
         s.addAttribute(.kern, value: width - current, range: NSRange(location: NSMaxRange(range) - 1, length: 1))
+    }
+
+    /// Lays out a list item on a fixed grid, whatever whitespace or marker spelling the source uses:
+    /// the leading whitespace collapses and the paragraph indents `indentStep` per level instead,
+    /// and the marker plus the spaces after it take exactly `width`
+    private func layoutListItem(lead: NSRange, prefix: NSRange, width: CGFloat, line: NSRange, in s: NSTextStorage) {
+        let leadText = (s.string as NSString).substring(with: lead)
+        let level = leadText.filter { $0 == "\t" }.count + leadText.filter { $0 == " " }.count / Self.indentUnit.count
+        if lead.length > 0 {
+            s.addAttributes([.font: NSFont.systemFont(ofSize: 0.01), .foregroundColor: NSColor.clear], range: lead)
+        }
+        let natural = s.attributedSubstring(from: prefix).size().width
+        s.addAttribute(.kern, value: width - natural, range: NSRange(location: NSMaxRange(prefix) - 1, length: 1))
+
+        let p = baseParagraph
+        p.firstLineHeadIndent = CGFloat(level) * Self.indentStep
+        p.headIndent = p.firstLineHeadIndent + width
+        p.tabStops = []
+        p.defaultTabInterval = 0.1   // a pasted tab in the collapsed lead shouldn't jump to a tab stop
+        s.addAttribute(.paragraphStyle, value: p, range: line)
     }
 
     /// Align wrapped lines with the text after the marker
@@ -230,6 +255,61 @@ final class MarkdownTextView: NSTextView {
         }
     }
 
+    // MARK: - Nest lists with Tab
+
+    override func insertTab(_ sender: Any?) {
+        if !shiftListLines(by: 1) { super.insertTab(sender) }
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        if !shiftListLines(by: -1) { super.insertBacktab(sender) }
+    }
+
+    /// Indents (+1) or outdents (-1) every list item touched by the selection.
+    /// Returns false when the selection has no list items, so Tab keeps its usual meaning.
+    private func shiftListLines(by delta: Int) -> Bool {
+        let ns = string as NSString
+        let sel = selectedRange()
+        let block = ns.paragraphRange(for: sel)
+        var lines: [String] = []
+        ns.enumerateSubstrings(in: block, options: [.byParagraphs]) { line, _, _, _ in lines.append(line ?? "") }
+        if lines.isEmpty { lines = [""] }
+
+        func isListItem(_ line: String) -> Bool {
+            let r = NSRange(location: 0, length: (line as NSString).length)
+            return Self.taskRegex.firstMatch(in: line, range: r) != nil || Self.bulletRegex.firstMatch(in: line, range: r) != nil
+        }
+        guard lines.contains(where: isListItem) else { return false }
+
+        var firstShift = 0, totalShift = 0
+        let shifted = lines.enumerated().map { i, line -> String in
+            guard isListItem(line) else { return line }
+            var out = line
+            if delta > 0 {
+                out = Self.indentUnit + line
+            } else if line.hasPrefix("\t") {
+                out = String(line.dropFirst())
+            } else {
+                out = String(line.dropFirst(min(Self.indentUnit.count, line.prefix { $0 == " " }.count)))
+            }
+            let change = (out as NSString).length - (line as NSString).length
+            if i == 0 { firstShift = change }
+            totalShift += change
+            return out
+        }
+        var text = shifted.joined(separator: "\n")
+        if NSMaxRange(block) > 0, ns.substring(with: NSRange(location: NSMaxRange(block) - 1, length: 1)) == "\n" { text += "\n" }
+
+        guard totalShift != 0, shouldChangeText(in: block, replacementString: text) else { return true }
+        textStorage?.replaceCharacters(in: block, with: text)
+        didChangeText()
+        // Keep the caret on the same character; a multi-line selection keeps covering the same lines
+        let start = max(block.location, sel.location + firstShift)
+        setSelectedRange(sel.length == 0 ? NSRange(location: start, length: 0)
+                                         : NSRange(location: start, length: max(0, sel.length + totalShift - firstShift)))
+        return true
+    }
+
     // MARK: - Continue lists on Return
 
     override func insertNewline(_ sender: Any?) {
@@ -262,7 +342,8 @@ final class MarkdownTextView: NSTextView {
             return
         }
         if NSMaxRange(matched) >= local.length {
-            // Return on an empty item ends the list
+            // Return on an empty item steps out one level, and ends the list at the top level
+            if line.first == " " || line.first == "\t", shiftListLines(by: -1) { return }
             insertText("", replacementRange: lineRange)
         } else {
             insertText("\n" + prefix, replacementRange: sel)

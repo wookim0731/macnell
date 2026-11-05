@@ -38,8 +38,20 @@ struct Notebook: Codable, Identifiable {
     var subtitle = ""
     var cover: CoverColor = .green
     var layout: PageLayout = .macnell
+    /// Titles of the three Macnell-layout sections, top to bottom
+    var sectionNames = Notebook.defaultSectionNames
     var pages: [Page] = [Page()]
     var currentPage = 0
+
+    static let defaultSectionNames = ["To Do", "Done", "Summary"]
+
+    /// `sectionNames` with blanks falling back to the defaults
+    var resolvedSectionNames: [String] {
+        Self.defaultSectionNames.indices.map { i in
+            let name = i < sectionNames.count ? sectionNames[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            return name.isEmpty ? Self.defaultSectionNames[i] : name
+        }
+    }
 }
 
 extension Notebook {
@@ -51,6 +63,7 @@ extension Notebook {
         subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
         cover = try c.decodeIfPresent(CoverColor.self, forKey: .cover) ?? .green
         layout = try c.decodeIfPresent(PageLayout.self, forKey: .layout) ?? .macnell
+        sectionNames = try c.decodeIfPresent([String].self, forKey: .sectionNames) ?? Self.defaultSectionNames
         pages = try c.decodeIfPresent([Page].self, forKey: .pages) ?? [Page()]
         currentPage = try c.decodeIfPresent(Int.self, forKey: .currentPage) ?? 0
     }

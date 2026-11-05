@@ -68,8 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMainMenu() {
         let mainMenu = NSMenu()
-        let left = String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!))
-        let right = String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
 
         let appMenu = NSMenu()
         appMenu.addItem(item("Settings…", #selector(showSettings), key: ","))
@@ -89,8 +87,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         addSubmenu(edit, to: mainMenu)
 
         let page = NSMenu(title: "Page")
-        page.addItem(item("Previous Page", #selector(MainWindowController.previousPage), key: left, target: main))
-        page.addItem(item("Next Page", #selector(MainWindowController.nextPage), key: right, target: main))
+        // ⇧⌘[ / ⇧⌘] (typed as { and }): one step up from ⌘[ / ⌘] sections, and ⌘←/→ stay free for line start/end
+        page.addItem(item("Previous Page", #selector(MainWindowController.previousPage), key: "{", target: main))
+        page.addItem(item("Next Page", #selector(MainWindowController.nextPage), key: "}", target: main))
         page.addItem(item("Previous Section", #selector(MainWindowController.previousSection), key: "[", target: main))
         page.addItem(item("Next Section", #selector(MainWindowController.nextSection), key: "]", target: main))
         page.addItem(item("Close Notebook", #selector(MainWindowController.closeNotebook), key: "w", target: main))
@@ -102,6 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let view = NSMenu(title: "View")
         view.addItem(item("Notebook Covers", #selector(MainWindowController.toggleShelf), key: "\\", target: main))
+        view.addItem(item("Toggle Full Screen", #selector(MainWindowController.toggleFullScreen), key: "f",
+                          modifiers: [.command, .control], target: main))
         addSubmenu(view, to: mainMenu)
 
         NSApp.mainMenu = mainMenu

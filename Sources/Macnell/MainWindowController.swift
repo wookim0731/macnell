@@ -15,6 +15,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private var maxPageWidth: NSLayoutConstraint!
     private let shelf = CoverShelf()
     private let closedView = ClosedNotebookView()
+    private let previousArrow = PageArrow(.previous)
+    private let nextArrow = PageArrow(.next)
     private var isClosed: Bool { !closedView.isHidden }
     private var shelfWidth: NSLayoutConstraint!
     private var shelfVisible = false
@@ -46,10 +48,12 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         buildLayout()
         pageView.onEdit = { [weak self] page in self?.store.page = page }
         pageView.onContextMenu = { [weak self] tv, point in self?.showTextMenu(for: tv, at: point) }
+        pageView.onRenameSection = { [weak self] index, name in self?.renameSection(index, to: name) }
         shelf.onSelect = { [weak self] n in self?.selectNotebook(n) }
         shelf.onEdit = { [weak self] n in self?.editCover(n) }
         shelf.onContextMenu = { [weak self] n, point in self?.showCoverMenu(n, at: point) }
         shelf.onAdd = { [weak self] in self?.addNotebook() }
+        shelf.onMove = { [weak self] from, to in self?.moveNotebook(from, to: to) }
         closedView.onOpen = { [weak self] in self?.openNotebook() }
         applyTheme()
         applyPageMode()
@@ -108,6 +112,24 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             gutter.bottomAnchor.constraint(equalTo: pageHost.bottomAnchor, constant: -20),
             gutter.widthAnchor.constraint(equalToConstant: 1),
         ])
+        // Arrows sit just outside the page, or at the window edge when the page fills it;
+        // added before the closed view so the cover hides them
+        for arrow in [previousArrow, nextArrow] {
+            root.addSubview(arrow)
+            arrow.centerYAnchor.constraint(equalTo: pageHost.centerYAnchor).isActive = true
+        }
+        previousArrow.onClick = { [weak self] in self?.go(-1) }
+        nextArrow.onClick = { [weak self] in self?.go(1) }
+        let outsideLeft = previousArrow.trailingAnchor.constraint(equalTo: pageHost.leadingAnchor, constant: -8)
+        let outsideRight = nextArrow.leadingAnchor.constraint(equalTo: pageHost.trailingAnchor, constant: 8)
+        outsideLeft.priority = .defaultHigh
+        outsideRight.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            outsideLeft, outsideRight,
+            previousArrow.leadingAnchor.constraint(greaterThanOrEqualTo: area.leadingAnchor, constant: 4),
+            nextArrow.trailingAnchor.constraint(lessThanOrEqualTo: area.trailingAnchor, constant: -4),
+        ])
+
         closedView.isHidden = true
         root.addSubview(closedView)
         NSLayoutConstraint.activate([
@@ -135,19 +157,14 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         enterFullScreenIfNeeded()
     }
 
-    /// Macnell only runs full screen
+    /// Macnell lives full screen; ⌃⌘F (or the green button) leaves it for a while,
+    /// and the next time the window is opened it goes back to full screen
     func enterFullScreenIfNeeded() {
         if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
     }
 
-    func windowDidEnterFullScreen(_ notification: Notification) {
-        // The green button would leave full screen; there is no windowed mode
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
-    }
-
-    func windowDidExitFullScreen(_ notification: Notification) {
-        // Anything that still takes the window out of full screen puts it straight back
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.enterFullScreenIfNeeded() }
+    @objc func toggleFullScreen() {
+        window.toggleFullScreen(nil)
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -171,16 +188,26 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         }
         let nb = store.notebook
         pageView.setLayout(nb.layout)
+        pageView.setSectionNames(nb.resolvedSectionNames)
         pageView.load(store.page, index: nb.currentPage, count: nb.pages.count)
         if store.data.twoPageView {
             previousView.setLayout(nb.layout)
+            previousView.setSectionNames(nb.resolvedSectionNames)
             if nb.currentPage > 0 {
                 previousView.load(nb.pages[nb.currentPage - 1], index: nb.currentPage - 1, count: nb.pages.count)
             } else {
                 previousView.loadEmpty(message: "No earlier page")
             }
         }
-        pageView.focusPrimary()
+        pageView.focusRemembered()
+        updateArrows()
+    }
+
+    /// First page: only →, last page: only ←, in between: both
+    private func updateArrows() {
+        let nb = store.notebook
+        previousArrow.isHidden = nb.currentPage == 0
+        nextArrow.isHidden = nb.currentPage >= nb.pages.count - 1
     }
 
     private func bounce(_ direction: Int) {
@@ -279,6 +306,24 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         guard n != store.data.currentNotebook else { return }
         store.data.currentNotebook = n
         showCurrentPage(direction: 0)
+        notebooksChanged()
+    }
+
+    /// Section titles belong to the notebook, so every page (and the left page) follows
+    private func renameSection(_ index: Int, to name: String) {
+        var names = store.notebook.resolvedSectionNames
+        names[index] = name
+        store.notebook.sectionNames = names
+        pageView.setSectionNames(store.notebook.resolvedSectionNames)
+        previousView.setSectionNames(store.notebook.resolvedSectionNames)
+    }
+
+    private func moveNotebook(_ from: Int, to: Int) {
+        let current = store.data.notebooks[store.data.currentNotebook].id
+        var notebooks = store.data.notebooks
+        notebooks.insert(notebooks.remove(at: from), at: to)
+        store.data.notebooks = notebooks
+        store.data.currentNotebook = notebooks.firstIndex { $0.id == current } ?? 0
         notebooksChanged()
     }
 
@@ -482,6 +527,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         pageView.apply(theme)
         previousView.apply(theme)
         gutter.color = theme.divider
+        previousArrow.color = theme.secondaryText
+        nextArrow.color = theme.secondaryText
     }
 
     // MARK: - Swipe to flip

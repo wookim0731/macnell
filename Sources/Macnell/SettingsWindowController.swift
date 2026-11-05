@@ -57,10 +57,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Every shortcut in the app, shown in Settings so nothing is hidden
     static let shortcuts: [(keys: String, action: String)] = [
         ("⌘W", "Close the notebook (shows its cover); press again to close the window"),
-        ("⌘← / ⌘→", "Previous / next page (or swipe with two fingers)"),
+        ("⇧⌘[ / ⇧⌘]", "Previous / next page (or swipe with two fingers, or the arrows beside the page)"),
         ("⌘T", "New page"),
         ("⌘[ / ⌘]", "Move between title and sections"),
         ("⌘\\", "Show or hide notebook covers"),
+        ("⌃⌘F", "Leave full screen for a while (it comes back next time you open Macnell)"),
         ("⇧⌘N", "New notebook"),
         ("⌘,", "Settings"),
     ]
@@ -164,7 +165,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             hint: "Two pages shows the previous page on the left (read-only) next to the one you're writing in.")
         row("Reopen to:", reopenControl,
             hint: "What you see when you come back after closing the window (⌘W twice).")
-        row("Layout:", Self.hint("Each notebook has its own layout: Macnell (To do / Done / Notes), Cornell or Blank. Open the covers with ⌘\\ and double-click one to change it."))
+        row("Layout:", Self.hint("Each notebook has its own layout: Macnell (To Do / Done / Summary), Cornell or Blank. Open the covers with ⌘\\ and double-click one to change it. In Macnell, double-click a section title on the page to rename it for that notebook."))
 
         header("General")
         row("Startup:", loginCheckbox)

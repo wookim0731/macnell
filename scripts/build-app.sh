@@ -3,12 +3,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release
+# Universal binary: Apple Silicon and Intel
+ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+BIN=$(swift build -c release "${ARCHS[@]}" --show-bin-path)
 
 APP=build/Macnell.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/Macnell "$APP/Contents/MacOS/Macnell"
+cp "$BIN/Macnell" "$APP/Contents/MacOS/Macnell"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # App icon: Resources/AppIcon.png (from scripts/make-icon.swift) → AppIcon.icns

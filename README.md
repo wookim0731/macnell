@@ -2,11 +2,21 @@
 
 A notes app for macOS that stays running in the background.
 
+## Install
+
+1. Download `Macnell-x.y.z.zip` from [Releases](https://github.com/wookim0731/macnell/releases/latest) and unzip it.
+2. Move `Macnell.app` to the Applications folder.
+3. Open it. The app isn't signed with an Apple Developer ID yet, so the first time macOS says it can't verify the developer.
+   Click **Done**, then go to System Settings → Privacy & Security, scroll down, and click **Open Anyway** next to Macnell.
+   (Or run `xattr -dr com.apple.quarantine /Applications/Macnell.app` in Terminal.)
+
+Requires macOS 13 or later, on Apple Silicon or Intel.
+
 ## Page layouts
 
 Each notebook has its own page layout. Pick it when you create the notebook, or double-click its cover later to change it.
 
-- **Macnell** (default): To do / Done / Notes
+- **Macnell** (default): To Do / Done / Summary. Double-click a section title on the page to rename it for that notebook.
 - **Cornell**: Cues | Notes, with a Summary underneath
 - **Blank**: a single notes area
 
